@@ -1,0 +1,6 @@
+state.pkl
+/venv
+
+# macOS specific files/folders
+.DS_Store
+.idea
