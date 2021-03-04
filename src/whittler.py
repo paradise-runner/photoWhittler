@@ -1,13 +1,11 @@
-import sys
 import os
 import shutil
 import pickle
 from typing import List
 from concurrent.futures import ThreadPoolExecutor
 
-from PIL import Image
-from PyQt5.QtCore import QDir, Qt, QSize, QPoint, QRect
-from PyQt5.QtGui import QPixmap, QIcon, QPainter
+from PyQt5.QtCore import QDir, Qt, QSize
+from PyQt5.QtGui import QPixmap, QIcon
 from PyQt5.QtWidgets import (
     QLabel,
     QWidget,
@@ -18,14 +16,15 @@ from PyQt5.QtWidgets import (
     QScrollArea,
     QHBoxLayout,
     QVBoxLayout,
-    QApplication,
     QPushButton,
 )
 
-from load_save_dialog import LoadSaveDialog, WhittleState
-from constants import (
+from src.load_save_dialog import LoadSaveDialog
+from src.tools import save_image_as_thumbnail, join_pixmap
+from src.whittle_file import WhittleFile
+from src.whittle_state import WhittleState
+from src.constants import (
     JPG_EXTENSION,
-    WhittleFile,
     VALID_EXTENSIONS,
     BACKGROUND_COLOR,
     BUTTON_STYLE,
@@ -33,31 +32,8 @@ from constants import (
     RAW_EXTENSIONS,
     CHECKMARK_ICON_PATH,
     X_MARK_ICON_PATH,
-    THUMBNAIL_SIZE,
     SAVE_STATE_PATH,
 )
-
-
-def join_pixmap(p1, p2, mode=QPainter.CompositionMode_SourceOver):
-    s = p1.size()
-    result = QPixmap(s)
-    result.fill(Qt.transparent)
-    painter =QPainter(result)
-    painter.setRenderHint(QPainter.Antialiasing)
-    painter.drawPixmap(QPoint(), p1)
-    painter.setCompositionMode(mode)
-    painter.drawPixmap(QRect(0, 0, 24, 24), p2, p2.rect())
-    painter.end()
-    return result
-
-
-def save_image_as_thumbnail(jpeg_file_path):
-    wf = WhittleFile(jpeg_file_path)
-    destination_file_path = os.path.join(os.getcwd(), "_temp", f"{wf.file_name}.jpg")
-    with Image.open(jpeg_file_path) as im:
-        im.thumbnail(THUMBNAIL_SIZE)
-        im.save(destination_file_path, "JPEG")
-    return destination_file_path
 
 
 class Whittler(QMainWindow):
@@ -123,8 +99,9 @@ class Whittler(QMainWindow):
         self.resize(1000, 600)
         state = self.load_state()
 
-        if state.whittled:
-            return
+        if state is not None:
+            if state.whittled:
+                return
 
         if state is not None and os.path.exists(str(state.folder_path)):
             self.load_save_dialog_box(state)
@@ -134,7 +111,7 @@ class Whittler(QMainWindow):
         if dialog.exec_():
             self.folder_path = state.folder_path
             self.whittled = state.whittled
-            self.open_folder()
+            self.open_folder(state.folder_path)
             self.voting_dict = state.voting_dict
             for file_name, wf_set in self.voting_dict.items():
                 wf = next(iter(wf_set))
@@ -384,10 +361,3 @@ class Whittler(QMainWindow):
         self.clean_up_temp()
         self.save_state()
         event.accept()
-
-
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    whittler = Whittler()
-    whittler.show()
-    sys.exit(app.exec_())

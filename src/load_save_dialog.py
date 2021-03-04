@@ -25,11 +25,3 @@ class LoadSaveDialog(QDialog):
         self.layout.addWidget(message)
         self.layout.addWidget(self.buttonBox)
         self.setLayout(self.layout)
-
-
-class WhittleState:
-
-    def __init__(self, folder_path, voting_dict, whittled):
-        self.folder_path = folder_path
-        self.voting_dict = voting_dict
-        self.whittled = whittled

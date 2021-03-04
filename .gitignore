@@ -1,5 +1,7 @@
+# Repo specific ignore
 state.pkl
 /venv
+__pycache__
 
 # macOS specific files/folders
 .DS_Store

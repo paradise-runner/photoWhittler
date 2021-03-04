@@ -1,5 +1,5 @@
 # Photo Whittler
-
+![PhotoWhittler](res/whittler.png)
 ## Program Description
 This is meant to be a specific use tool of upvoting and downvoting photos that are meant to be 
 then edited in a program like Adobe Lightroom or some other professional software. This is not 
@@ -27,4 +27,4 @@ edited and which can be left on the cutting room floor so to speak.
 1. Create a virtual environment with the command `python3.9 -m venv venv`
 1. Activate the virtual environment with the command `source venv/bin/activate`
 1. Install required modules to the virtual environment with the command `pip install -r requirements.txt`
-1. Run the program and start using the whittler! `python whittler.py`
+1. Run the program and start using the whittler! `python app.py`
