@@ -14,3 +14,6 @@ CHECKMARK_ICON_PATH = os.path.join(RES_PATH, "iconmonstr-check-mark-6-240.png")
 X_MARK_ICON_PATH = os.path.join(RES_PATH, "iconmonstr-x-mark-4-240.png")
 THUMBNAIL_SIZE = 100, 100
 SAVE_STATE_PATH = os.path.join(os.path.abspath(os.getcwd()), "state.pkl")
+RAW_UNEDITED_FOLDER_NAME = "raw_unedited"
+JPG_UNEDITED_FOLDER_NAME = "jpeg_unedited"
+TEMP_PATH = os.path.join(os.getcwd(), "_temp")

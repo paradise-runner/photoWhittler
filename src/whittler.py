@@ -9,7 +9,6 @@ from PyQt5.QtGui import QPixmap, QIcon
 from PyQt5.QtWidgets import (
     QLabel,
     QWidget,
-    QMainWindow,
     QMenu,
     QAction,
     QFileDialog,
@@ -19,6 +18,7 @@ from PyQt5.QtWidgets import (
     QPushButton,
 )
 
+from src.general_window import GeneralWindow
 from src.load_save_dialog import LoadSaveDialog
 from src.tools import save_image_as_thumbnail, join_pixmap
 from src.whittle_file import WhittleFile
@@ -26,17 +26,19 @@ from src.whittle_state import WhittleState
 from src.constants import (
     JPG_EXTENSION,
     VALID_EXTENSIONS,
-    BACKGROUND_COLOR,
     BUTTON_STYLE,
     UPVOTED_FOLDER_NAME,
     RAW_EXTENSIONS,
     CHECKMARK_ICON_PATH,
     X_MARK_ICON_PATH,
     SAVE_STATE_PATH,
+    RAW_UNEDITED_FOLDER_NAME,
+    JPG_UNEDITED_FOLDER_NAME,
+    TEMP_PATH,
 )
 
 
-class Whittler(QMainWindow):
+class Whittler(GeneralWindow):
 
     def __init__(self):
         self.voting_dict = {}
@@ -49,8 +51,22 @@ class Whittler(QMainWindow):
 
         super().__init__()
 
-        self.setStyleSheet(BACKGROUND_COLOR)
+        self.create_actions()
+        self.create_menus()
 
+        self.setWindowTitle("Photo Whittler")
+
+        self.initUI()
+        state = self.load_state()
+
+        if state is not None:
+            if state.whittled:
+                return
+
+        if state is not None and os.path.exists(str(state.folder_path)):
+            self.load_save_dialog_box(state)
+
+    def initUI(self):
         self.windowLayout = QVBoxLayout()
         self.workingLayout = QHBoxLayout()
 
@@ -92,19 +108,25 @@ class Whittler(QMainWindow):
         widget.setLayout(self.windowLayout)
         self.setCentralWidget(widget)
 
-        self.create_actions()
-        self.create_menus()
+    def create_actions(self):
+        self.openFolderAct = QAction(
+            "&Open Folder", self, shortcut="Ctrl+O", triggered=self.open_folder
+        )
+        self.organizeFolderAct = QAction(
+            "&Organize Folder", self, shortcut="Ctrl+N", triggered=self.organize_folder
+        )
+        self.clearSateStateAct = QAction(
+            "&Clear Save Sate", self, shortcut="Ctrl+E", triggered=self.clear_save_state
+        )
 
-        self.setWindowTitle("Whittler")
-        self.resize(1000, 600)
-        state = self.load_state()
+    def create_menus(self):
+        self.fileMenu = QMenu("&File", self)
+        self.fileMenu.addAction(self.openFolderAct)
+        self.fileMenu.addAction(self.organizeFolderAct)
+        self.fileMenu.addSeparator()
+        self.fileMenu.addAction(self.clearSateStateAct)
 
-        if state is not None:
-            if state.whittled:
-                return
-
-        if state is not None and os.path.exists(str(state.folder_path)):
-            self.load_save_dialog_box(state)
+        self.menuBar().addMenu(self.fileMenu)
 
     def load_save_dialog_box(self, state):
         dialog = LoadSaveDialog()
@@ -155,6 +177,10 @@ class Whittler(QMainWindow):
 
         self.whittled = True
 
+    def clear_save_state(self):
+        if os.path.exists(SAVE_STATE_PATH):
+            os.remove(SAVE_STATE_PATH)
+
     def open_folder(self, folder_path=None):
         self.voting_dict = {}
         self.photo_picker_dict = {}
@@ -164,6 +190,7 @@ class Whittler(QMainWindow):
             self.folder_path = QFileDialog.getExistingDirectory(self, "Open Folder", QDir.currentPath())
         else:
             self.folder_path = folder_path
+
         for root, dir, files in os.walk(self.folder_path):
             for file in files:
                 wf = WhittleFile(os.path.join(root, file))
@@ -205,6 +232,71 @@ class Whittler(QMainWindow):
 
         full_res = self.get_full_res_photo_path(photo_file_paths[0])
         self.set_main_photo(full_res)
+
+    def organize_folder(self):
+        def move_organized_files(organized_file_paths):
+            current_location = organized_file_paths[0]
+            destination = organized_file_paths[1]
+            shutil.move(current_location, destination)
+
+        organize_folder = QFileDialog.getExistingDirectory(self, "Open Folder", QDir.currentPath())
+        if not os.path.exists(str(organize_folder)):
+            return
+
+        organize_dict = {}
+        for file in os.listdir(organize_folder):
+            wf = WhittleFile(os.path.join(organize_folder, file))
+            if {wf.file_extension}.issubset(VALID_EXTENSIONS):
+                if organize_dict.get(wf.file_name) is None:
+                    organize_dict[wf.file_name] = {wf}
+                else:
+                    organize_dict[wf.file_name].add(wf)
+
+        if not organize_dict:
+            return None
+
+        organize_dict = {
+            file_name: wf_set for file_name, wf_set in organize_dict.items() if len(wf_set) == 2
+        }
+        if not organize_dict:
+            return None
+
+        file_extensions = []
+        for file_name, wf_set in organize_dict.items():
+            for wf in wf_set:
+                file_extensions.append(wf.file_extension)
+
+        file_extensions = set(file_extensions)
+        if len(file_extensions) != 2:
+            return None
+
+        raw_unedited_folder_path = (os.path.join(organize_folder, RAW_UNEDITED_FOLDER_NAME))
+        jpeg_unedited_folder_path = (os.path.join(organize_folder, JPG_UNEDITED_FOLDER_NAME))
+
+        os.makedirs(raw_unedited_folder_path, exist_ok=True)
+        os.makedirs(jpeg_unedited_folder_path, exist_ok=True)
+
+        file_movement_list = []
+
+        for file_name, wf_set in organize_dict.items():
+            for wf in wf_set:
+                if {wf.file_extension}.issubset(RAW_EXTENSIONS):
+                    file_movement_list.append(
+                        (
+                            wf.file_path,
+                            os.path.join(raw_unedited_folder_path, wf.file_name+wf.file_extension)
+                        )
+                    )
+                else:
+                    file_movement_list.append(
+                        (
+                            wf.file_path,
+                            os.path.join(jpeg_unedited_folder_path, wf.file_name + wf.file_extension)
+                        )
+                    )
+
+        with ThreadPoolExecutor() as tpe:
+            tpe.map(move_organized_files, file_movement_list)
 
     def get_full_res_photo_path(self, photo_file_path):
         file_name = WhittleFile(photo_file_path).file_name
@@ -260,20 +352,6 @@ class Whittler(QMainWindow):
                 {WhittleFile(photo_file_path).file_name: (photo_button, photo_file_path)}
             )
 
-    def create_actions(self):
-        self.openFolderAct = QAction(
-            "&Open Folder", self, shortcut="Ctrl+O", triggered=self.open_folder
-        )
-        self.exitAct = QAction("&Exit", self, shortcut="Ctrl+Q", triggered=self.close)
-
-    def create_menus(self):
-        self.fileMenu = QMenu("&File", self)
-        self.fileMenu.addAction(self.openFolderAct)
-        self.fileMenu.addSeparator()
-        self.fileMenu.addAction(self.exitAct)
-
-        self.menuBar().addMenu(self.fileMenu)
-
     def clear_programmatically_populated_layouts(self):
         while self.photoPickerLayout.count():
             child = self.photoPickerLayout.takeAt(0)
@@ -320,14 +398,17 @@ class Whittler(QMainWindow):
 
     @staticmethod
     def clean_up_temp():
+        if not os.path.exists(TEMP_PATH):
+            os.makedirs(TEMP_PATH, exist_ok=True)
+
         thumbnails = [
             file for file in os.listdir(
-                os.path.join(os.getcwd(), "_temp")
+                os.path.join(TEMP_PATH)
             ) if file.lower().endswith(JPG_EXTENSION)
         ]
         if thumbnails:
             for file in thumbnails:
-                path = os.path.join(os.getcwd(), "_temp", file)
+                path = os.path.join(TEMP_PATH, file)
                 os.remove(path)
 
     @staticmethod

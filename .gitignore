@@ -2,6 +2,8 @@
 state.pkl
 /venv
 __pycache__
+/dist
+/build
 
 # macOS specific files/folders
 .DS_Store
