@@ -1,5 +1,5 @@
 # Photo Whittler
-![PhotoWhittler](res/whittler.png)
+![PhotoWhittler](res/whittler_example.png)
 ## Program Description
 This is meant to be a specific use tool of upvoting and downvoting photos that are meant to be 
 then edited in a program like Adobe Lightroom or some other photo editing professional software. 

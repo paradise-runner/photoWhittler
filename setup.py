@@ -12,7 +12,8 @@ DATA_FILES = [
     ('res', ['res/iconmonstr-x-mark-4-240.png', 'res/iconmonstr-check-mark-6-240.png'])
 ]
 OPTIONS = {
-    'packages': ['PIL']
+    'packages': ['PIL'],
+    'iconfile': 'res/whittler.icns',
 }
 
 setup(
