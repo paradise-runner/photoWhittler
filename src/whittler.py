@@ -19,10 +19,14 @@ from PyQt5.QtWidgets import (
 )
 
 from src.general_window import GeneralWindow
-from src.load_save_dialog import LoadSaveDialog
 from src.tools import save_image_as_thumbnail, join_pixmap
 from src.whittle_file import WhittleFile
 from src.whittle_state import WhittleState
+from src.dialogs import (
+    LoadSaveDialog,
+    ErrorDialog,
+    ActionCompleteDialog,
+)
 from src.constants import (
     JPG_EXTENSION,
     VALID_EXTENSIONS,
@@ -152,6 +156,10 @@ class Whittler(GeneralWindow):
             shutil.copy(current_location, destination)
 
         if not self.voting_dict:
+            ErrorDialog(
+                error="Unable to Whittle files",
+                error_reason="No photos imported to Whittler to take action on.",
+            ).exec_()
             return
 
         upvote_file_paths = []
@@ -159,7 +167,10 @@ class Whittler(GeneralWindow):
         os.makedirs(os.path.join(self.folder_path, UPVOTED_FOLDER_NAME), exist_ok=True)
 
         for file_name, wf_set in self.voting_dict.items():
-            raw_w_file = next(wf for wf in wf_set if {wf.file_extension}.issubset(RAW_EXTENSIONS))
+            raw_w_file = next((wf for wf in wf_set if {wf.file_extension}.issubset(RAW_EXTENSIONS)), None)
+
+            if raw_w_file is None:
+                continue
 
             if not raw_w_file.edit_file:
                 continue
@@ -171,6 +182,13 @@ class Whittler(GeneralWindow):
             )
 
             upvote_file_paths.append((raw_w_file.file_path, upvoted_file_path))
+
+        if not upvote_file_paths:
+            ErrorDialog(
+                error="Unable to Whittle files",
+                error_reason="No photos upvoted.  Please upvote photos to allow Whittling.",
+            ).exec_()
+            return
 
         with ThreadPoolExecutor() as tpe:
             tpe.map(copy_files_to_upvoted_folder, upvote_file_paths)
@@ -191,6 +209,9 @@ class Whittler(GeneralWindow):
         else:
             self.folder_path = folder_path
 
+        if self.folder_path == "":
+            return
+
         for root, dir, files in os.walk(self.folder_path):
             for file in files:
                 wf = WhittleFile(os.path.join(root, file))
@@ -200,6 +221,12 @@ class Whittler(GeneralWindow):
                     else:
                         self.voting_dict[wf.file_name].add(wf)
         if not self.voting_dict:
+            ErrorDialog(
+                error="Unable to open folder",
+                error_reason="Unable to locate any valid photo files at folder path.  "
+                             "Please select a new folder to begin Whittling.",
+                extra_info=f'Folder path: "{self.folder_path}".'
+            ).exec_()
             return
 
         # filter out file_names that don't have a JPG whittle file as we want to load those into
@@ -209,6 +236,12 @@ class Whittler(GeneralWindow):
             any([wf.file_extension == JPG_EXTENSION for wf in wf_set])
         }
         if not self.voting_dict:
+            ErrorDialog(
+                error="Unable to open folder",
+                error_reason="Unable to locate any valid JPG files at folder path.  "
+                             "Please select a new folder to begin Whittling.",
+                extra_info=f'Folder path: "{self.folder_path}".'
+            ).exec_()
             return
 
         # before we create new thumbnails, delete any that exit in cwd
@@ -240,7 +273,7 @@ class Whittler(GeneralWindow):
             shutil.move(current_location, destination)
 
         organize_folder = QFileDialog.getExistingDirectory(self, "Open Folder", QDir.currentPath())
-        if not os.path.exists(str(organize_folder)):
+        if organize_folder == "":
             return
 
         organize_dict = {}
@@ -253,12 +286,22 @@ class Whittler(GeneralWindow):
                     organize_dict[wf.file_name].add(wf)
 
         if not organize_dict:
-            return None
+            ErrorDialog(
+                error="Unable to organize folder",
+                error_reason="Unable to locate any photo files with valid file extension types.",
+                extra_info=f'Supported extension types: "{*VALID_EXTENSIONS,}".'
+            ).exec_()
+            return
 
         organize_dict = {
             file_name: wf_set for file_name, wf_set in organize_dict.items() if len(wf_set) == 2
         }
         if not organize_dict:
+            ErrorDialog(
+                error="Unable to organize folder",
+                error_reason="Folder to organize did not contain any files where there were 2 file "
+                             "types per unique photo.",
+            ).exec_()
             return None
 
         file_extensions = []
@@ -268,6 +311,11 @@ class Whittler(GeneralWindow):
 
         file_extensions = set(file_extensions)
         if len(file_extensions) != 2:
+            ErrorDialog(
+                error="Unable to organize folder",
+                error_reason="Folder to organize contained more than two file extensions.",
+                extra_info=f'File Extensions: "{*file_extensions,}"'
+            ).exec_()
             return None
 
         raw_unedited_folder_path = (os.path.join(organize_folder, RAW_UNEDITED_FOLDER_NAME))
@@ -294,6 +342,10 @@ class Whittler(GeneralWindow):
                             os.path.join(jpeg_unedited_folder_path, wf.file_name + wf.file_extension)
                         )
                     )
+        ActionCompleteDialog(
+            action="Folder Organization",
+            action_message=f'Finished organizing "{os.path.basename(organize_folder)}" folder.'
+        )
 
         with ThreadPoolExecutor() as tpe:
             tpe.map(move_organized_files, file_movement_list)

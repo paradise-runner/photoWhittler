@@ -13,7 +13,7 @@ DATA_FILES = [
 ]
 OPTIONS = {
     'packages': ['PIL'],
-    'iconfile': 'res/whittler.icns',
+    'iconfile': 'res/whittler_icon.icns',
 }
 
 setup(
