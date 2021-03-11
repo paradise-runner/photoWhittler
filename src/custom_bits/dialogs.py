@@ -1,4 +1,5 @@
-from PyQt5.QtGui import QFont
+from PyQt5.QtCore import QRect, QSize
+from PyQt5.QtGui import QFont, QMovie
 from PyQt5.QtWidgets import (
     QDialog,
     QDialogButtonBox,

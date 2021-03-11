@@ -1,4 +1,5 @@
 import os
+from typing import OrderedDict, Dict
 from PIL import Image
 
 from PyQt5.QtCore import QPoint, QRect, Qt
@@ -29,3 +30,21 @@ def save_image_as_thumbnail(jpeg_file_path):
     im.save(destination_file_path, "JPEG")
 
     return destination_file_path
+
+
+def get_next_key(dict: Dict, key):
+    current_index = list(dict.keys()).index(key)
+    next_key_index = current_index + 1
+    try:
+        return list(dict.keys())[next_key_index]
+    except IndexError:
+        return None
+
+
+def get_previous_key(dict: Dict, key):
+    current_index = list(dict.keys()).index(key)
+    previous_key_index = current_index - 1
+    try:
+        return list(dict.keys())[previous_key_index]
+    except IndexError:
+        return None

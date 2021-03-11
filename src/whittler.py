@@ -4,7 +4,7 @@ import pickle
 from typing import List
 from concurrent.futures import ThreadPoolExecutor
 
-from PyQt5.QtCore import QDir, Qt, QSize
+from PyQt5.QtCore import QDir, Qt, QSize, QEvent
 from PyQt5.QtGui import QPixmap, QIcon
 from PyQt5.QtWidgets import (
     QLabel,
@@ -18,11 +18,11 @@ from PyQt5.QtWidgets import (
     QPushButton,
 )
 
-from src.general_window import GeneralWindow
-from src.tools import save_image_as_thumbnail, join_pixmap
+from src.custom_bits.general_window import GeneralWindow
+from src.tools import save_image_as_thumbnail, join_pixmap, get_previous_key, get_next_key
 from src.whittle_file import WhittleFile
 from src.whittle_state import WhittleState
-from src.dialogs import (
+from src.custom_bits.dialogs import (
     LoadSaveDialog,
     ErrorDialog,
     ActionCompleteDialog,
@@ -39,6 +39,8 @@ from src.constants import (
     RAW_UNEDITED_FOLDER_NAME,
     JPG_UNEDITED_FOLDER_NAME,
     TEMP_PATH,
+    SELECT_BUTTON_COLOR,
+    BUTTON_COLOR,
 )
 
 
@@ -49,6 +51,7 @@ class Whittler(GeneralWindow):
         self.folder_path = None
         self.photo_picker_dict = {}
         self.whittled = False
+        self.main_photo_file_path = None
 
         self.checkmark_icon = QIcon(CHECKMARK_ICON_PATH)
         self.x_mark_icon = QIcon(X_MARK_ICON_PATH)
@@ -69,6 +72,17 @@ class Whittler(GeneralWindow):
 
         if state is not None and os.path.exists(str(state.folder_path)):
             self.load_save_dialog_box(state)
+
+    def eventFilter(self, source, event):
+        # Over-ride the scrolling of the key presses to move between main photos along the photo
+        # picker
+        if event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Right:
+                self.set_next_photo_as_main()
+            elif event.key() == Qt.Key_Left:
+                self.set_previous_photo_as_main()
+            return True
+        return super(Whittler, self).eventFilter(source, event)
 
     def initUI(self):
         self.windowLayout = QVBoxLayout()
@@ -99,6 +113,7 @@ class Whittler(GeneralWindow):
         self.workingLayout.addLayout(self.actionsLayout, 1)
 
         self.scroll_area = QScrollArea(self)
+        self.scroll_area.installEventFilter(self)
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setFixedHeight(130)
         widget_content = QWidget()
@@ -342,13 +357,14 @@ class Whittler(GeneralWindow):
                             os.path.join(jpeg_unedited_folder_path, wf.file_name + wf.file_extension)
                         )
                     )
-        ActionCompleteDialog(
-            action="Folder Organization",
-            action_message=f'Finished organizing "{os.path.basename(organize_folder)}" folder.'
-        )
 
         with ThreadPoolExecutor() as tpe:
             tpe.map(move_organized_files, file_movement_list)
+
+        ActionCompleteDialog(
+            action="Folder Organization",
+            action_message=f'Finished organizing "{os.path.basename(organize_folder)}" folder.'
+        ).exec_()
 
     def get_full_res_photo_path(self, photo_file_path):
         file_name = WhittleFile(photo_file_path).file_name
@@ -359,6 +375,8 @@ class Whittler(GeneralWindow):
     def set_main_photo(self, file_path):
         if not os.path.exists(str(file_path)):
             return
+        self.main_photo_file_path = file_path
+
         pixmap = QPixmap(file_path)
         pixmap = pixmap.scaled(600, 600, Qt.KeepAspectRatio)
         self.selectedImage.setPixmap(pixmap)
@@ -378,6 +396,45 @@ class Whittler(GeneralWindow):
         self.downvote_button.clicked.connect(
             lambda checked, _file_path=file_path: self._downvote_main_photo(_file_path)
         )
+        # Reset the color of all other buttons before setting new button color
+        for file_name, photo_tuple in self.photo_picker_dict.items():
+            photo_tuple[0].setStyleSheet(BUTTON_COLOR)
+
+        # Setting the color of the selected button to be a little lighter, for a nice touch
+        photo_button = self.photo_picker_dict[WhittleFile(file_path).file_name][0]
+        photo_button.setStyleSheet(SELECT_BUTTON_COLOR)
+
+    def set_next_photo_as_main(self):
+        # Move along photo_picker_dict to set main photos
+        if not os.path.exists(str(self.main_photo_file_path)):
+            return None
+
+        current_file_name = WhittleFile(self.main_photo_file_path).file_name
+        next_file_name = get_next_key(self.photo_picker_dict, current_file_name)
+        if next_file_name is None:
+            return None
+
+        full_res = next(
+            wf.file_path for wf in self.voting_dict[next_file_name] if
+            wf.file_extension == JPG_EXTENSION
+        )
+        self.set_main_photo(full_res)
+
+    def set_previous_photo_as_main(self):
+        # Move along photo_picker_dict to set main photos
+        if not os.path.exists(str(self.main_photo_file_path)):
+            return None
+
+        current_file_name = WhittleFile(self.main_photo_file_path).file_name
+        previous_file_name = get_previous_key(self.photo_picker_dict, current_file_name)
+        if previous_file_name is None:
+            return None
+
+        full_res = next(
+            wf.file_path for wf in self.voting_dict[previous_file_name] if
+            wf.file_extension == JPG_EXTENSION
+        )
+        self.set_main_photo(full_res)
 
     def populate_photo_picker(self, photo_file_paths: List):
         def _get_icon(photo_file_path):
