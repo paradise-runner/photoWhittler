@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import (
     QMainWindow,
 )
 
-from src.constants import BACKGROUND_COLOR
+from src.constants import BACKGROUND_COLOR, WINDOW_WIDTH, WINDOW_HEIGHT
 
 
 class GeneralWindow(QMainWindow):
@@ -12,5 +12,5 @@ class GeneralWindow(QMainWindow):
 
         self.setStyleSheet(BACKGROUND_COLOR)
 
-        self.resize(1000, 600)
+        self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
 

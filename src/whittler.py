@@ -39,8 +39,14 @@ from src.constants import (
     RAW_UNEDITED_FOLDER_NAME,
     JPG_UNEDITED_FOLDER_NAME,
     TEMP_PATH,
-    SELECT_BUTTON_COLOR,
-    BUTTON_COLOR,
+    PHOTO_PICKER_HEIGHT,
+    MAIN_PHOTO_HEIGHT_AND_WIDTH,
+    THUMBNAIL_WIDTH,
+    THUMBNAIL_HEIGHT,
+    PICKER_BUTTON_WIDTH,
+    PICKER_BUTTON_HEIGHT,
+    PICKER_BUTTON_STYLE,
+    SELECTED_PICKER_BUTTON_STYLE,
 )
 
 
@@ -78,9 +84,13 @@ class Whittler(GeneralWindow):
         # picker
         if event.type() == QEvent.KeyPress:
             if event.key() == Qt.Key_Right:
-                self.set_next_photo_as_main()
+                self._set_next_photo_as_main()
             elif event.key() == Qt.Key_Left:
-                self.set_previous_photo_as_main()
+                self._set_previous_photo_as_main()
+            elif event.key() == Qt.Key_Up:
+                self._upvote_main_photo()
+            elif event.key() == Qt.Key_Down:
+                self._downvote_main_photo()
             return True
         return super(Whittler, self).eventFilter(source, event)
 
@@ -115,10 +125,12 @@ class Whittler(GeneralWindow):
         self.scroll_area = QScrollArea(self)
         self.scroll_area.installEventFilter(self)
         self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setFixedHeight(130)
+        self.scroll_area.setFixedHeight(PHOTO_PICKER_HEIGHT)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         widget_content = QWidget()
         self.scroll_area.setWidget(widget_content)
         self.photoPickerLayout = QHBoxLayout(widget_content)
+        self.photoPickerLayout.setSpacing(5)
 
         self.windowLayout.addLayout(self.workingLayout, 2)
         self.windowLayout.addWidget(self.scroll_area)
@@ -158,9 +170,9 @@ class Whittler(GeneralWindow):
                 wf = next(iter(wf_set))
                 if wf.edit_file is not None:
                     if wf.edit_file:
-                        self._upvote_main_photo(wf.file_path)
+                        self._upvote_main_photo()
                     else:
-                        self._downvote_main_photo(wf.file_path)
+                        self._downvote_main_photo()
         else:
             return
 
@@ -260,7 +272,7 @@ class Whittler(GeneralWindow):
             return
 
         # before we create new thumbnails, delete any that exit in cwd
-        self.clean_up_temp()
+        self._clean_up_temp()
 
         file_names = list(self.voting_dict.keys())
         jpg_photo_file_paths = []
@@ -275,11 +287,11 @@ class Whittler(GeneralWindow):
         photo_file_paths = list(results)
         photo_file_paths.sort()
 
-        self.clear_programmatically_populated_layouts()
-        self.populate_photo_picker(photo_file_paths)
+        self._clear_programmatically_populated_layouts()
+        self._populate_photo_picker(photo_file_paths)
 
-        full_res = self.get_full_res_photo_path(photo_file_paths[0])
-        self.set_main_photo(full_res)
+        full_res = self._get_full_res_photo_path(photo_file_paths[0])
+        self._set_main_photo(full_res)
 
     def organize_folder(self):
         def move_organized_files(organized_file_paths):
@@ -317,7 +329,7 @@ class Whittler(GeneralWindow):
                 error_reason="Folder to organize did not contain any files where there were 2 file "
                              "types per unique photo.",
             ).exec_()
-            return None
+            return
 
         file_extensions = []
         for file_name, wf_set in organize_dict.items():
@@ -331,7 +343,7 @@ class Whittler(GeneralWindow):
                 error_reason="Folder to organize contained more than two file extensions.",
                 extra_info=f'File Extensions: "{*file_extensions,}"'
             ).exec_()
-            return None
+            return
 
         raw_unedited_folder_path = (os.path.join(organize_folder, RAW_UNEDITED_FOLDER_NAME))
         jpeg_unedited_folder_path = (os.path.join(organize_folder, JPG_UNEDITED_FOLDER_NAME))
@@ -366,19 +378,19 @@ class Whittler(GeneralWindow):
             action_message=f'Finished organizing "{os.path.basename(organize_folder)}" folder.'
         ).exec_()
 
-    def get_full_res_photo_path(self, photo_file_path):
+    def _get_full_res_photo_path(self, photo_file_path):
         file_name = WhittleFile(photo_file_path).file_name
         return next(
             wf.file_path for wf in self.voting_dict[file_name] if wf.file_extension == JPG_EXTENSION
         )
 
-    def set_main_photo(self, file_path):
+    def _set_main_photo(self, file_path):
         if not os.path.exists(str(file_path)):
             return
         self.main_photo_file_path = file_path
 
         pixmap = QPixmap(file_path)
-        pixmap = pixmap.scaled(600, 600, Qt.KeepAspectRatio)
+        pixmap = pixmap.scaled(MAIN_PHOTO_HEIGHT_AND_WIDTH, MAIN_PHOTO_HEIGHT_AND_WIDTH, Qt.KeepAspectRatio)
         self.selectedImage.setPixmap(pixmap)
 
         try:
@@ -390,21 +402,17 @@ class Whittler(GeneralWindow):
         except Exception:
             pass
 
-        self.upvote_button.clicked.connect(
-            lambda checked, _file_path=file_path: self._upvote_main_photo(_file_path)
-        )
-        self.downvote_button.clicked.connect(
-            lambda checked, _file_path=file_path: self._downvote_main_photo(_file_path)
-        )
+        self.upvote_button.clicked.connect(self._upvote_main_photo)
+        self.downvote_button.clicked.connect(self._downvote_main_photo)
         # Reset the color of all other buttons before setting new button color
         for file_name, photo_tuple in self.photo_picker_dict.items():
-            photo_tuple[0].setStyleSheet(BUTTON_COLOR)
+            photo_tuple[0].setStyleSheet(PICKER_BUTTON_STYLE)
 
         # Setting the color of the selected button to be a little lighter, for a nice touch
         photo_button = self.photo_picker_dict[WhittleFile(file_path).file_name][0]
-        photo_button.setStyleSheet(SELECT_BUTTON_COLOR)
+        photo_button.setStyleSheet(SELECTED_PICKER_BUTTON_STYLE)
 
-    def set_next_photo_as_main(self):
+    def _set_next_photo_as_main(self):
         # Move along photo_picker_dict to set main photos
         if not os.path.exists(str(self.main_photo_file_path)):
             return None
@@ -418,9 +426,9 @@ class Whittler(GeneralWindow):
             wf.file_path for wf in self.voting_dict[next_file_name] if
             wf.file_extension == JPG_EXTENSION
         )
-        self.set_main_photo(full_res)
+        self._set_main_photo(full_res)
 
-    def set_previous_photo_as_main(self):
+    def _set_previous_photo_as_main(self):
         # Move along photo_picker_dict to set main photos
         if not os.path.exists(str(self.main_photo_file_path)):
             return None
@@ -434,9 +442,9 @@ class Whittler(GeneralWindow):
             wf.file_path for wf in self.voting_dict[previous_file_name] if
             wf.file_extension == JPG_EXTENSION
         )
-        self.set_main_photo(full_res)
+        self._set_main_photo(full_res)
 
-    def populate_photo_picker(self, photo_file_paths: List):
+    def _populate_photo_picker(self, photo_file_paths: List):
         def _get_icon(photo_file_path):
             return QIcon(photo_file_path)
 
@@ -449,19 +457,19 @@ class Whittler(GeneralWindow):
         icons = list(results)
         for photo_file_path, icon in zip(photo_file_paths, icons):
             photo_button = QPushButton()
-            photo_button.setStyleSheet(BUTTON_STYLE)
+            photo_button.setStyleSheet(PICKER_BUTTON_STYLE)
             photo_button.setIcon(icon)
-            photo_button.setIconSize(QSize(100, 100))
-            photo_button.setFixedSize(130, 100)
-            full_res_file_path = self.get_full_res_photo_path(photo_file_path)
+            photo_button.setIconSize(QSize(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT))
+            photo_button.setFixedSize(PICKER_BUTTON_WIDTH, PICKER_BUTTON_HEIGHT)
+            full_res_file_path = self._get_full_res_photo_path(photo_file_path)
             photo_button.clicked.connect(
-                lambda checked, _path=full_res_file_path: self.set_main_photo(_path))
+                lambda checked, _path=full_res_file_path: self._set_main_photo(_path))
             self.photoPickerLayout.addWidget(photo_button)
             self.photo_picker_dict.update(
                 {WhittleFile(photo_file_path).file_name: (photo_button, photo_file_path)}
             )
 
-    def clear_programmatically_populated_layouts(self):
+    def _clear_programmatically_populated_layouts(self):
         while self.photoPickerLayout.count():
             child = self.photoPickerLayout.takeAt(0)
             if child.widget():
@@ -469,26 +477,32 @@ class Whittler(GeneralWindow):
 
         self.selectedImage.setPixmap(QPixmap())
 
-    def _upvote_main_photo(self, file_path):
-        wf_name = WhittleFile(file_path).file_name
-        wf_set = self.voting_dict.get(wf_name)
+    def _upvote_main_photo(self):
+        if not os.path.exists(str(self.main_photo_file_path)):
+            return None
+
+        current_file_name = WhittleFile(self.main_photo_file_path).file_name
+        wf_set = self.voting_dict.get(current_file_name)
 
         if wf_set is None:
             return
 
         for wf in wf_set:
             wf.edit_file = True
-        upvoted_photo_button = self.photo_picker_dict[wf_name][0]
-        thumbnail_file_path = self.photo_picker_dict[wf_name][1]
+        upvoted_photo_button = self.photo_picker_dict[current_file_name][0]
+        thumbnail_file_path = self.photo_picker_dict[current_file_name][1]
         self._update_button_with_vote(
             upvoted_photo_button,
             thumbnail_file_path,
             CHECKMARK_ICON_PATH,
         )
-        self.voting_dict[wf_name] = wf_set
+        self.voting_dict[current_file_name] = wf_set
 
-    def _downvote_main_photo(self, file_path):
-        wf_name = WhittleFile(file_path).file_name
+    def _downvote_main_photo(self):
+        if not os.path.exists(str(self.main_photo_file_path)):
+            return None
+
+        current_file_name = WhittleFile(self.main_photo_file_path).file_name
         wf_set = self.voting_dict.get(wf_name)
 
         if wf_set is None:
@@ -497,8 +511,8 @@ class Whittler(GeneralWindow):
         for wf in wf_set:
             wf.edit_file = False
 
-        downvoted_photo_button = self.photo_picker_dict[wf_name][0]
-        thumbnail_file_path = self.photo_picker_dict[wf_name][1]
+        downvoted_photo_button = self.photo_picker_dict[current_file_name][0]
+        thumbnail_file_path = self.photo_picker_dict[current_file_name][1]
         self._update_button_with_vote(
             downvoted_photo_button,
             thumbnail_file_path,
@@ -506,7 +520,7 @@ class Whittler(GeneralWindow):
         )
 
     @staticmethod
-    def clean_up_temp():
+    def _clean_up_temp():
         if not os.path.exists(TEMP_PATH):
             os.makedirs(TEMP_PATH, exist_ok=True)
 
@@ -548,6 +562,6 @@ class Whittler(GeneralWindow):
         return None
 
     def closeEvent(self, event):
-        self.clean_up_temp()
+        self._clean_up_temp()
         self.save_state()
         event.accept()

@@ -35,7 +35,4 @@ instructions!
        `git clone https://github.com/paradise-runner/photoWhittler.git`
     1. Downloading and unzip the [repo](https://github.com/paradise-runner/photoWhittler)
         1. Copy the unzipped folder to wherever you moved to in step 4
-1. Create a virtual environment with the command `python3.9 -m venv venv`
-1. Activate the virtual environment with the command `source venv/bin/activate`
-1. Install required modules to the virtual environment with the command `pip install -r requirements.txt`
 1. Run the shell script `./build-dot-app.sh` to build the app

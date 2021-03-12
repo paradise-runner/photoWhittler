@@ -5,7 +5,7 @@ from PIL import Image
 from PyQt5.QtCore import QPoint, QRect, Qt
 from PyQt5.QtGui import QPainter, QPixmap
 
-from src.constants import THUMBNAIL_SIZE, TEMP_PATH
+from src.constants import TEMP_PATH, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT
 from src.whittle_file import WhittleFile
 
 
@@ -26,7 +26,7 @@ def save_image_as_thumbnail(jpeg_file_path):
     wf = WhittleFile(jpeg_file_path)
     destination_file_path = os.path.join(TEMP_PATH, f"{wf.file_name}.jpg")
     im = Image.open(jpeg_file_path)
-    im.thumbnail(THUMBNAIL_SIZE)
+    im.thumbnail((THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT))
     im.save(destination_file_path, "JPEG")
 
     return destination_file_path
