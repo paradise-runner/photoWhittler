@@ -1,5 +1,5 @@
 import os
-from typing import OrderedDict, Dict
+from typing import Dict
 from PIL import Image
 
 from PyQt5.QtCore import QPoint, QRect, Qt

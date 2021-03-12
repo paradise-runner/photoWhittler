@@ -503,7 +503,7 @@ class Whittler(GeneralWindow):
             return None
 
         current_file_name = WhittleFile(self.main_photo_file_path).file_name
-        wf_set = self.voting_dict.get(wf_name)
+        wf_set = self.voting_dict.get(current_file_name)
 
         if wf_set is None:
             return
@@ -542,7 +542,7 @@ class Whittler(GeneralWindow):
         result = join_pixmap(main_image_pixmap, icon_image_pixmap)
         temp_icon.addPixmap(result)
         button.setIcon(temp_icon)
-        button.setIconSize(QSize(100, 100))
+        button.setIconSize(QSize(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT))
 
     def save_state(self):
         if os.path.exists(SAVE_STATE_PATH):
