@@ -73,3 +73,24 @@ class ActionCompleteDialog(QDialog):
         self.layout.addWidget(message_text)
         self.layout.addWidget(self.buttonBox)
         self.setLayout(self.layout)
+
+
+class OrganizeArchiveDialog(QDialog):
+    def __init__(self, archive_name: str, parent=None):
+        super().__init__(parent=parent)
+
+        self.setWindowTitle(f"Organize {archive_name} Archive?")
+
+        QBtn = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+
+        self.buttonBox = QDialogButtonBox(QBtn)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+
+        self.layout = QVBoxLayout()
+        message = QLabel(
+            f"Would you like to organize the {archive_name} archive by file type?"
+        )
+        self.layout.addWidget(message)
+        self.layout.addWidget(self.buttonBox)
+        self.setLayout(self.layout)

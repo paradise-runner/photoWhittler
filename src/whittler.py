@@ -16,6 +16,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QVBoxLayout,
     QPushButton,
+    QInputDialog
 )
 
 from src.custom_bits.general_window import GeneralWindow
@@ -149,10 +150,14 @@ class Whittler(GeneralWindow):
         self.clearSateStateAct = QAction(
             "&Clear Save Sate", self, shortcut="Ctrl+E", triggered=self.clear_save_state
         )
+        self.archivePhotosAct = QAction(
+            "&Organize Folder", self, shortcut="Ctrl+M", triggered=self.archive_photos
+        )
 
     def create_menus(self):
         self.fileMenu = QMenu("&File", self)
         self.fileMenu.addAction(self.openFolderAct)
+        self.fileMenu.addAction(self.archivePhotosAct)
         self.fileMenu.addAction(self.organizeFolderAct)
         self.fileMenu.addSeparator()
         self.fileMenu.addAction(self.clearSateStateAct)
@@ -177,11 +182,6 @@ class Whittler(GeneralWindow):
             return
 
     def whittle(self):
-        def copy_files_to_upvoted_folder(upvote_file_path):
-            current_location = upvote_file_path[0]
-            destination = upvote_file_path[1]
-            shutil.copy(current_location, destination)
-
         if not self.voting_dict:
             ErrorDialog(
                 error="Unable to Whittle files",
@@ -218,7 +218,7 @@ class Whittler(GeneralWindow):
             return
 
         with ThreadPoolExecutor() as tpe:
-            tpe.map(copy_files_to_upvoted_folder, upvote_file_paths)
+            tpe.map(thread_safe_file_copy, upvote_file_paths)
 
         self.whittled = True
 
@@ -293,15 +293,14 @@ class Whittler(GeneralWindow):
         full_res = self._get_full_res_photo_path(photo_file_paths[0])
         self._set_main_photo(full_res)
 
-    def organize_folder(self):
-        def move_organized_files(organized_file_paths):
-            current_location = organized_file_paths[0]
-            destination = organized_file_paths[1]
-            shutil.move(current_location, destination)
+    def organize_folder(self, folder_path=None):
 
-        organize_folder = QFileDialog.getExistingDirectory(self, "Open Folder", QDir.currentPath())
-        if organize_folder == "":
-            return
+        if folder_path is None:
+            organize_folder = QFileDialog.getExistingDirectory(self, "Open Folder", QDir.currentPath())
+            if organize_folder == "":
+                return
+        else:
+            organize_folder = folder_path
 
         organize_dict = {}
         for file in os.listdir(organize_folder):
@@ -371,12 +370,64 @@ class Whittler(GeneralWindow):
                     )
 
         with ThreadPoolExecutor() as tpe:
-            tpe.map(move_organized_files, file_movement_list)
+            tpe.map(thread_safe_file_move, file_movement_list)
 
         ActionCompleteDialog(
             action="Folder Organization",
             action_message=f'Finished organizing "{os.path.basename(organize_folder)}" folder.'
         ).exec_()
+
+    def archive_photos(self):
+        unarchived_location = QFileDialog.getExistingDirectory(
+            self, "Select Unarchived Photo Location", QDir.currentPath()
+        )
+        if unarchived_location == "":
+            return
+
+        # maybe make this part of a config that can be set?
+        archive_location = QFileDialog.getExistingDirectory(
+            self, "Select Archive Location", QDir.currentPath()
+        )
+
+        ok, archive_name = QInputDialog.getText(self, "Archive Name", "Enter Name")
+        if ok and archive_name:
+            pass
+        elif not ok:
+            return
+        elif not archive_name:
+            ErrorDialog(
+                error="Unable to create archive folder",
+                error_reason="No name was passed in for archive.",
+            ).exec_()
+            return
+
+        archive_path = os.path.join(archive_location, archive_name)
+        os.mkdir(archive_path, exist_ok=True)
+
+        file_paths_to_archive = []
+        for root, dir, files in os.walk(unarchived_location):
+            for file in files:
+                wf = WhittleFile(os.path.join(root, file))
+                if {wf.file_extension}.issubset(VALID_EXTENSIONS):
+                    files_to_archive.append(
+                        (
+                            wf.file_path,
+                            os.path.join(archive_path, wf.file_name + wf.file_extension)
+                        )
+                    )
+
+        with ThreadPoolExecutor() as tpe:
+            tpe.map(thread_safe_file_move, file_paths_to_archive)
+
+        dialog = OrganizeArchiveDialog()
+        if dialog.exec_():
+            self.organize_folder(archive_path)
+        else:
+            ActionCompleteDialog(
+                action="Folder Archiving",
+                action_message=f'Finished archiving photos from "{archive_name}" to '
+                               f'"{os.path.basename(unarchived_location)}".'
+            ).exec_()
 
     def _get_full_res_photo_path(self, photo_file_path):
         file_name = WhittleFile(photo_file_path).file_name
@@ -451,7 +502,7 @@ class Whittler(GeneralWindow):
         if not photo_file_paths:
             return
 
-        with ThreadPoolExecutor(max_workers=20) as tpe:
+        with ThreadPoolExecutor() as tpe:
             results = tpe.map(_get_icon, photo_file_paths)
 
         icons = list(results)
@@ -518,6 +569,12 @@ class Whittler(GeneralWindow):
             thumbnail_file_path,
             X_MARK_ICON_PATH,
         )
+
+    @staticmethod
+    def _threaded_file_move(file_move_tuple):
+        current_location = ""
+        destination_location = ""
+        shutil.move()
 
     @staticmethod
     def _clean_up_temp():

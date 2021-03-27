@@ -1,6 +1,7 @@
 import os
 from typing import Dict
 from PIL import Image
+import shutil
 
 from PyQt5.QtCore import QPoint, QRect, Qt
 from PyQt5.QtGui import QPainter, QPixmap
@@ -32,11 +33,11 @@ def save_image_as_thumbnail(jpeg_file_path):
     return destination_file_path
 
 
-def get_next_key(dict: Dict, key):
-    current_index = list(dict.keys()).index(key)
+def get_next_key(_dict: Dict, key):
+    current_index = list(_dict.keys()).index(key)
     next_key_index = current_index + 1
     try:
-        return list(dict.keys())[next_key_index]
+        return list(_dict.keys())[next_key_index]
     except IndexError:
         return None
 
@@ -48,3 +49,16 @@ def get_previous_key(dict: Dict, key):
         return list(dict.keys())[previous_key_index]
     except IndexError:
         return None
+
+
+def thread_safe_file_copy(file_copy_tuple):
+    current_location = file_copy_tuple[0]
+    destination = file_copy_tuple[1]
+    shutil.copy(current_location, destination)
+
+
+def thread_safe_file_move(file_move_tuple):
+    current_location = file_move_tuple[0]
+    destination = file_move_tuple[1]
+    shutil.move(current_location, destination)
+
