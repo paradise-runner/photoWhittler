@@ -20,7 +20,14 @@ from PyQt5.QtWidgets import (
 )
 
 from src.custom_bits.general_window import GeneralWindow
-from src.tools import save_image_as_thumbnail, join_pixmap, get_previous_key, get_next_key
+from src.tools import (
+    save_image_as_thumbnail,
+    join_pixmap,
+    get_previous_key,
+    get_next_key,
+    get_width,
+    get_height,
+)
 from src.whittle_file import WhittleFile
 from src.whittle_state import WhittleState
 from src.custom_bits.dialogs import (
@@ -48,22 +55,28 @@ from src.constants import (
     PICKER_BUTTON_HEIGHT,
     PICKER_BUTTON_STYLE,
     SELECTED_PICKER_BUTTON_STYLE,
+    LIGHT_TEXT_COLOR,
+    WHITTLE_BUTTON_STYLE,
+    UPVOTE_BUTTON_STYLE,
+    DOWNVOTE_BUTTON_STYLE,
 )
 
 
 class Whittler(GeneralWindow):
 
-    def __init__(self):
+    def __init__(self, screen_width, screen_height):
         self.voting_dict = {}
         self.folder_path = None
         self.photo_picker_dict = {}
         self.whittled = False
         self.main_photo_file_path = None
+        self.screen_width = screen_width
+        self.screen_height = screen_height
 
         self.checkmark_icon = QIcon(CHECKMARK_ICON_PATH)
         self.x_mark_icon = QIcon(X_MARK_ICON_PATH)
 
-        super().__init__()
+        super().__init__(screen_width, screen_height)
 
         self.create_actions()
         self.create_menus()
@@ -79,6 +92,12 @@ class Whittler(GeneralWindow):
 
         if state is not None and os.path.exists(str(state.folder_path)):
             self.load_save_dialog_box(state)
+
+    def _get_width(self, object_width):
+        return get_width(self.screen_width, object_width)
+
+    def _get_height(self, object_height):
+        return get_height(self.screen_height, object_height)
 
     def eventFilter(self, source, event):
         # Over-ride the scrolling of the key presses to move between main photos along the photo
@@ -97,36 +116,47 @@ class Whittler(GeneralWindow):
 
     def initUI(self):
         self.windowLayout = QVBoxLayout()
+
         self.workingLayout = QHBoxLayout()
 
         self.photoLayout = QVBoxLayout()
         self.actionsLayout = QVBoxLayout()
+        self.missionControlLayout = QHBoxLayout()
+        self.buttonLayout = QHBoxLayout()
 
         self.selectedImage = QLabel()
 
-        self.photoLayout.addStretch()
         self.photoLayout.addWidget(self.selectedImage)
-        self.photoLayout.addStretch()
 
         self.upvote_button = QPushButton("Upvote", self)
-        self.upvote_button.setStyleSheet(BUTTON_STYLE)
+        self.upvote_button.setStyleSheet(UPVOTE_BUTTON_STYLE)
         self.downvote_button = QPushButton("Downvote", self)
-        self.downvote_button.setStyleSheet(BUTTON_STYLE)
+        self.downvote_button.setStyleSheet(DOWNVOTE_BUTTON_STYLE)
+
+        self.statsLabel = QLabel(self)
+        self.statsLabel.setStyleSheet(LIGHT_TEXT_COLOR)
         self.whittle_button = QPushButton("Whittle", self)
-        self.whittle_button.setStyleSheet(BUTTON_STYLE)
+        self.whittle_button.setStyleSheet(WHITTLE_BUTTON_STYLE)
         self.whittle_button.clicked.connect(self.whittle)
 
-        self.actionsLayout.addWidget(self.upvote_button, alignment=Qt.AlignLeft)
-        self.actionsLayout.addWidget(self.downvote_button, alignment=Qt.AlignLeft)
-        self.actionsLayout.addWidget(self.whittle_button, alignment=Qt.AlignLeft)
+        self.actionsLayout.addLayout(self.missionControlLayout)
+        self.actionsLayout.addLayout(self.buttonLayout)
+        self.actionsLayout.setContentsMargins(10, 0, 10, 0)
 
-        self.workingLayout.addLayout(self.photoLayout, 4)
+        self.missionControlLayout.addWidget(self.statsLabel, alignment=Qt.AlignLeft)
+        self.missionControlLayout.addWidget(self.whittle_button, alignment=Qt.AlignRight)
+
+        self.buttonLayout.addWidget(self.upvote_button, alignment=Qt.AlignLeft)
+        self.buttonLayout.addWidget(self.downvote_button, alignment=Qt.AlignRight)
+
+        # self.workingLayout.
+        self.workingLayout.addLayout(self.photoLayout, 2)
         self.workingLayout.addLayout(self.actionsLayout, 1)
 
         self.scroll_area = QScrollArea(self)
         self.scroll_area.installEventFilter(self)
         self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setFixedHeight(PHOTO_PICKER_HEIGHT)
+        self.scroll_area.setFixedHeight(self._get_height(PHOTO_PICKER_HEIGHT))
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         widget_content = QWidget()
         self.scroll_area.setWidget(widget_content)
@@ -171,14 +201,21 @@ class Whittler(GeneralWindow):
             self.whittled = state.whittled
             self.open_folder(state.folder_path)
             self.voting_dict = state.voting_dict
+            self._set_stats()
             for file_name, wf_set in self.voting_dict.items():
                 wf = next(iter(wf_set))
+                voted_photo_button = self.photo_picker_dict[wf.file_name][0]
+                thumbnail_file_path = self.photo_picker_dict[wf.file_name][1]
                 if wf.edit_file is not None:
                     if wf.edit_file:
-                        self._upvote_main_photo()
+                        icon_path = CHECKMARK_ICON_PATH
                     else:
-                        self._downvote_main_photo()
-        else:
+                        icon_path = X_MARK_ICON_PATH
+                    self._update_button_with_vote(
+                        voted_photo_button,
+                        thumbnail_file_path,
+                        icon_path,
+                    )
             return
 
     def whittle(self):
@@ -275,15 +312,17 @@ class Whittler(GeneralWindow):
         self._clean_up_temp()
 
         file_names = list(self.voting_dict.keys())
-        jpg_photo_file_paths = []
+        thumbnail_save_info = []
         for file_name in file_names:
             wf = next(
                 wf for wf in self.voting_dict[file_name] if wf.file_extension == JPG_EXTENSION
             )
-            jpg_photo_file_paths.append(wf.file_path)
+            thumbnail_save_info.append(
+                [wf.file_path, self._get_width(THUMBNAIL_WIDTH), self._get_height(THUMBNAIL_HEIGHT)]
+            )
 
         with ThreadPoolExecutor() as tpe:
-            results = tpe.map(save_image_as_thumbnail, jpg_photo_file_paths)
+            results = tpe.map(save_image_as_thumbnail, thumbnail_save_info)
         photo_file_paths = list(results)
         photo_file_paths.sort()
 
@@ -292,6 +331,7 @@ class Whittler(GeneralWindow):
 
         full_res = self._get_full_res_photo_path(photo_file_paths[0])
         self._set_main_photo(full_res)
+        self._set_stats()
 
     def organize_folder(self, folder_path=None):
 
@@ -441,7 +481,11 @@ class Whittler(GeneralWindow):
         self.main_photo_file_path = file_path
 
         pixmap = QPixmap(file_path)
-        pixmap = pixmap.scaled(MAIN_PHOTO_HEIGHT_AND_WIDTH, MAIN_PHOTO_HEIGHT_AND_WIDTH, Qt.KeepAspectRatio)
+        pixmap = pixmap.scaled(
+            self._get_width(MAIN_PHOTO_HEIGHT_AND_WIDTH),
+            self._get_height(MAIN_PHOTO_HEIGHT_AND_WIDTH),
+            Qt.KeepAspectRatio
+        )
         self.selectedImage.setPixmap(pixmap)
 
         try:
@@ -510,11 +554,21 @@ class Whittler(GeneralWindow):
             photo_button = QPushButton()
             photo_button.setStyleSheet(PICKER_BUTTON_STYLE)
             photo_button.setIcon(icon)
-            photo_button.setIconSize(QSize(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT))
-            photo_button.setFixedSize(PICKER_BUTTON_WIDTH, PICKER_BUTTON_HEIGHT)
+
+            photo_button.setIconSize(
+                QSize(
+                    self._get_width(THUMBNAIL_WIDTH),
+                    self._get_height(THUMBNAIL_HEIGHT),
+                )
+            )
+            photo_button.setFixedSize(
+                self._get_width(PICKER_BUTTON_WIDTH), self._get_height(PICKER_BUTTON_HEIGHT)
+            )
+
             full_res_file_path = self._get_full_res_photo_path(photo_file_path)
             photo_button.clicked.connect(
                 lambda checked, _path=full_res_file_path: self._set_main_photo(_path))
+
             self.photoPickerLayout.addWidget(photo_button)
             self.photo_picker_dict.update(
                 {WhittleFile(photo_file_path).file_name: (photo_button, photo_file_path)}
@@ -548,6 +602,7 @@ class Whittler(GeneralWindow):
             CHECKMARK_ICON_PATH,
         )
         self.voting_dict[current_file_name] = wf_set
+        self._set_stats()
 
     def _downvote_main_photo(self):
         if not os.path.exists(str(self.main_photo_file_path)):
@@ -569,6 +624,8 @@ class Whittler(GeneralWindow):
             thumbnail_file_path,
             X_MARK_ICON_PATH,
         )
+        self.voting_dict[current_file_name] = wf_set
+        self._set_stats()
 
     @staticmethod
     def _threaded_file_move(file_move_tuple):
@@ -591,15 +648,45 @@ class Whittler(GeneralWindow):
                 path = os.path.join(TEMP_PATH, file)
                 os.remove(path)
 
-    @staticmethod
-    def _update_button_with_vote(button, thumbnail_path, icon_path):
+    def _update_button_with_vote(self, button, thumbnail_path, icon_path):
         temp_icon = QIcon()
         main_image_pixmap = QPixmap(thumbnail_path)
         icon_image_pixmap = QPixmap(icon_path)
-        result = join_pixmap(main_image_pixmap, icon_image_pixmap)
+        result = join_pixmap(
+            main_image_pixmap,
+            icon_image_pixmap,
+            self.screen_width,
+            self.screen_height,
+        )
         temp_icon.addPixmap(result)
         button.setIcon(temp_icon)
-        button.setIconSize(QSize(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT))
+        button.setIconSize(
+            QSize(
+                self._get_width(THUMBNAIL_WIDTH),
+                self._get_height(THUMBNAIL_HEIGHT),
+            )
+        )
+
+    def _set_stats(self):
+        number_of_photos = f"Number of Photos: {len(self.voting_dict.keys())}"
+        upvotes = 0
+        downvotes = 0
+        for file_path, wf_set in self.voting_dict.items():
+            if next(wf for wf in wf_set).edit_file == True:
+                upvotes += 1
+            elif next(wf for wf in wf_set).edit_file == False:
+                downvotes += 1
+
+        number_of_upvotes = f"Number of Upvotes: {upvotes}"
+        number_of_downvotes = f"Number of Downvotes: {downvotes}"
+
+        stats = (
+        f"Whittle Statistics\n"
+        f"{number_of_photos}\n"
+        f"{number_of_upvotes}\n"
+        f"{number_of_downvotes}"
+        )
+        self.statsLabel.setText(stats)
 
     def save_state(self):
         if os.path.exists(SAVE_STATE_PATH):
